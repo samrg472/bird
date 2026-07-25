@@ -43,6 +43,7 @@ export const FALLBACK_QUERY_IDS = {
   GenericTimelineById: 'uGSr7alSjR9v6QJAIaqSKQ',
   TrendHistory: 'Sj4T-jSB9pr0Mxtsc1UKZQ',
   AboutAccountQuery: 'zs_jFPFT78rBpXv9Z3U2YQ',
+  UserByScreenName: 'xc8f1g7BYqr6VTzTbvNlGw',
 } as const;
 
 export type OperationName = keyof typeof FALLBACK_QUERY_IDS;

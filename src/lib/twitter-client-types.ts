@@ -331,9 +331,18 @@ export interface TwitterUser {
   description?: string;
   followersCount?: number;
   followingCount?: number;
+  tweetsCount?: number;
+  location?: string;
+  websiteUrl?: string;
   isBlueVerified?: boolean;
   profileImageUrl?: string;
   createdAt?: string;
+}
+
+export interface UserProfileResult {
+  success: boolean;
+  user?: TwitterUser;
+  error?: string;
 }
 
 export interface FollowingResult {

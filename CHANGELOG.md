@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.9.0 — 2026-07-24
+
+### Added
+- `profile <username>` command — full user profile lookup (bio, follower/following/tweet counts, location, website, join date, verified flag) via `UserByScreenName`, with `--json` output. Extends `TwitterUser` with `tweetsCount`, `location`, and `websiteUrl`.
+- `UserByScreenName` added to the query-ID inventory (`FALLBACK_QUERY_IDS`), so the profile lookup participates in runtime query-ID discovery and `bird query-ids --fresh` instead of relying solely on hardcoded IDs.
+
+### Tests
+- Client tests for `getUserProfile` (full mapping, `core`/`avatar` fallbacks, unavailable user, HTTP errors, invalid handle).
+- Command tests for `bird profile` (JSON output, formatted output, failure exit).
+
 ## 0.8.1 — 2026-02-24
 
 ### Added

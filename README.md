@@ -57,6 +57,10 @@ bird mentions --user @steipete -n 5
 bird user-tweets @steipete -n 20
 bird user-tweets @steipete -n 50 --json
 
+# User profile (bio, counts, location, website, join date)
+bird profile @steipete
+bird profile @steipete --json
+
 # Bookmarks
 bird bookmarks -n 5
 bird bookmarks --folder-id 123456789123456789 -n 5 # https://x.com/i/bookmarks/<folder-id>
@@ -189,6 +193,7 @@ Fields:
 - `bird list-timeline <list-id-or-url> [-n count] [--all] [--max-pages n] [--cursor string] [--json]` — get tweets from a list timeline; `--max-pages` implies `--all`.
 - `bird following [--user <userId>] [-n count] [--cursor string] [--all] [--max-pages n] [--json]` — list users that you (or another user) follow; `--max-pages` requires `--all`.
 - `bird followers [--user <userId>] [-n count] [--cursor string] [--all] [--max-pages n] [--json]` — list users that follow you (or another user); `--max-pages` requires `--all`.
+- `bird profile <@handle> [--json]` — show a user's full profile (bio, counts, location, website, join date).
 - `bird about <@handle> [--json]` — get account origin and location information for a user.
 - `bird whoami` — print which Twitter account your cookies belong to.
 - `bird check` — show which credentials are available and where they were sourced from.

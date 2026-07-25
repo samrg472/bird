@@ -4,6 +4,38 @@ import { normalizeHandle } from '../lib/normalize-handle.js';
 import { TwitterClient } from '../lib/twitter-client.js';
 import type { AboutAccountProfile, TwitterUser } from '../lib/twitter-client-types.js';
 
+function formatUserProfile(user: TwitterUser, ctx: CliContext): string[] {
+  const verified = user.isBlueVerified ? ' ✓' : '';
+  const lines: string[] = [`@${user.username} (${user.name})${verified}`];
+  if (user.description) {
+    lines.push(`  ${user.description}`);
+  }
+  if (user.location) {
+    lines.push(`📍 ${user.location}`);
+  }
+  if (user.websiteUrl) {
+    lines.push(`🌐 ${user.websiteUrl}`);
+  }
+  if (user.createdAt) {
+    lines.push(`📅 Joined ${user.createdAt}`);
+  }
+  const counts: string[] = [];
+  if (user.followersCount !== undefined) {
+    counts.push(`${user.followersCount.toLocaleString()} followers`);
+  }
+  if (user.followingCount !== undefined) {
+    counts.push(`${user.followingCount.toLocaleString()} following`);
+  }
+  if (user.tweetsCount !== undefined) {
+    counts.push(`${user.tweetsCount.toLocaleString()} tweets`);
+  }
+  if (counts.length > 0) {
+    lines.push(`${ctx.p('info')}${counts.join(' · ')}`);
+  }
+  lines.push(`🔗 https://x.com/${user.username}`);
+  return lines;
+}
+
 function formatAboutProfile(profile: AboutAccountProfile, ctx: CliContext, handle: string): string[] {
   const lines: string[] = [`${ctx.p('info')}Account information for @${handle}:`];
   if (profile.accountBasedIn) {
@@ -331,6 +363,49 @@ export function registerUserCommands(program: Command, ctx: CliContext): void {
         console.log(`${ctx.l('credentials')}${credentialSource}`);
       } else {
         console.error(`${ctx.p('err')}Failed to determine current user: ${result.error ?? 'Unknown error'}`);
+        process.exit(1);
+      }
+    });
+
+  program
+    .command('profile')
+    .description('Show a user profile (bio, counts, location, website, join date)')
+    .argument('<username>', 'Twitter username (with or without @)')
+    .option('--json', 'Output as JSON')
+    .action(async (username: string, cmdOpts: { json?: boolean }) => {
+      const opts = program.opts();
+      const timeoutMs = ctx.resolveTimeoutFromOptions(opts);
+      const normalizedHandle = normalizeHandle(username);
+
+      if (!normalizedHandle) {
+        console.error(`${ctx.p('err')}Invalid username: ${username}`);
+        process.exit(1);
+      }
+
+      const { cookies, warnings } = await ctx.resolveCredentialsFromOptions(opts);
+
+      for (const warning of warnings) {
+        console.error(`${ctx.p('warn')}${warning}`);
+      }
+
+      if (!cookies.authToken || !cookies.ct0) {
+        console.error(`${ctx.p('err')}Missing required credentials`);
+        process.exit(1);
+      }
+
+      const client = new TwitterClient({ cookies, timeoutMs });
+      const result = await client.getUserProfile(normalizedHandle);
+
+      if (result.success && result.user) {
+        if (cmdOpts.json) {
+          console.log(JSON.stringify(result.user, null, 2));
+        } else {
+          for (const line of formatUserProfile(result.user, ctx)) {
+            console.log(line);
+          }
+        }
+      } else {
+        console.error(`${ctx.p('err')}Failed to fetch profile: ${result.error ?? 'Unknown error'}`);
         process.exit(1);
       }
     });
