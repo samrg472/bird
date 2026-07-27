@@ -6,6 +6,7 @@ import {
   refreshFeatureOverridesCache,
 } from '../lib/runtime-features.js';
 import { runtimeQueryIds } from '../lib/runtime-query-ids.js';
+import { TARGET_QUERY_ID_OPERATIONS } from '../lib/twitter-client-constants.js';
 
 function countFeatureOverrides(overrides: FeatureOverrides): number {
   let count = 0;
@@ -27,18 +28,7 @@ export function registerQueryIdsCommand(program: Command, ctx: CliContext): void
     .option('--json', 'Output as JSON')
     .option('--fresh', 'Force refresh (downloads X client bundles)', false)
     .action(async (cmdOpts: { json?: boolean; fresh?: boolean }) => {
-      const operations = [
-        'CreateTweet',
-        'CreateRetweet',
-        'FavoriteTweet',
-        'TweetDetail',
-        'SearchTimeline',
-        'UserArticlesTweets',
-        'Bookmarks',
-        'Following',
-        'Followers',
-        'Likes',
-      ];
+      const operations = TARGET_QUERY_ID_OPERATIONS;
 
       if (cmdOpts.fresh) {
         console.error(`${ctx.p('info')}Refreshing GraphQL query IDs…`);
