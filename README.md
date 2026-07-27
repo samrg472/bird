@@ -61,6 +61,12 @@ bird user-tweets @steipete -n 50 --json
 bird profile @steipete
 bird profile @steipete --json
 
+# Direct messages (read-only)
+bird dms -n 20
+bird dms --json
+bird dm @steipete -n 20
+bird dm 1234567890-0987654321 --cursor 1234567890123456789
+
 # Bookmarks
 bird bookmarks -n 5
 bird bookmarks --folder-id 123456789123456789 -n 5 # https://x.com/i/bookmarks/<folder-id>
@@ -195,6 +201,8 @@ Fields:
 - `bird followers [--user <userId>] [-n count] [--cursor string] [--all] [--max-pages n] [--json]` — list users that follow you (or another user); `--max-pages` requires `--all`.
 - `bird profile <@handle> [--json]` — show a user's full profile (bio, counts, location, website, join date).
 - `bird about <@handle> [--json]` — get account origin and location information for a user.
+- `bird dms [-n count] [--json]` — list Direct Message inbox conversations.
+- `bird dm <conversation-id-or-@handle> [-n count] [--cursor <max_id>] [--json]` — show messages in a DM conversation (newest last); resolves `@handle` to a 1:1 conversation when possible.
 - `bird whoami` — print which Twitter account your cookies belong to.
 - `bird check` — show which credentials are available and where they were sourced from.
 

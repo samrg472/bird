@@ -1,6 +1,7 @@
 import type { AbstractConstructor } from './twitter-client-base.js';
 import { TwitterClientBase } from './twitter-client-base.js';
 import { type TwitterClientBookmarkMethods, withBookmarks } from './twitter-client-bookmarks.js';
+import { type TwitterClientDirectMessageMethods, withDirectMessages } from './twitter-client-dm.js';
 import { type TwitterClientEngagementMethods, withEngagement } from './twitter-client-engagement.js';
 import { type TwitterClientFollowMethods, withFollow } from './twitter-client-follow.js';
 import { type TwitterClientHomeMethods, withHome } from './twitter-client-home.js';
@@ -17,6 +18,7 @@ import { type TwitterClientUserMethods, withUsers } from './twitter-client-users
 
 type TwitterClientInstance = TwitterClientBase &
   TwitterClientBookmarkMethods &
+  TwitterClientDirectMessageMethods &
   TwitterClientEngagementMethods &
   TwitterClientFollowMethods &
   TwitterClientHomeMethods &
@@ -37,11 +39,15 @@ const MixedTwitterClient = withNews(
   withUserTweets(
     withUserLookup(
       withUsers(
-        withLists(
-          withHome(
-            withTimelines(
-              withSearch(
-                withTweetDetails(withPosting(withEngagement(withFollow(withBookmarks(withMedia(TwitterClientBase)))))),
+        withDirectMessages(
+          withLists(
+            withHome(
+              withTimelines(
+                withSearch(
+                  withTweetDetails(
+                    withPosting(withEngagement(withFollow(withBookmarks(withMedia(TwitterClientBase))))),
+                  ),
+                ),
               ),
             ),
           ),

@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import { registerBookmarksCommand } from '../commands/bookmarks.js';
 import { registerCheckCommand } from '../commands/check.js';
+import { registerDmCommands } from '../commands/dms.js';
 import { registerFollowCommands } from '../commands/follow.js';
 import { registerHelpCommand } from '../commands/help.js';
 import { registerHomeCommand } from '../commands/home.js';
@@ -41,6 +42,8 @@ export const KNOWN_COMMANDS = new Set([
   'help',
   'whoami',
   'check',
+  'dms',
+  'dm',
 ]);
 
 export function createProgram(ctx: CliContext): Command {
@@ -96,7 +99,7 @@ export function createProgram(ctx: CliContext): Command {
       ].join('\n\n')}\n\n${ctx.colors.section('Shortcuts')}\n${[
         formatExample('bird <tweet-id-or-url> [--json]', 'Shorthand for `bird read <tweet-id-or-url>`'),
       ].join('\n\n')}\n\n${ctx.colors.section('JSON Output')}\n${ctx.colors.muted(
-        `  Add ${ctx.colors.option('--json')} to: read, replies, thread, search, mentions, bookmarks, likes, following, followers, about, lists, list-timeline, user-tweets, query-ids`,
+        `  Add ${ctx.colors.option('--json')} to: read, replies, thread, search, mentions, bookmarks, likes, following, followers, about, lists, list-timeline, user-tweets, query-ids, dms, dm`,
       )}\n${ctx.colors.muted(
         `  Add ${ctx.colors.option('--json-full')} to include raw API response in ${ctx.colors.argument('_raw')} field (tweet commands only)`,
       )}\n${ctx.colors.muted(`  (Run ${ctx.colors.command('bird <command> --help')} to see per-command flags.)`)}`,
@@ -150,6 +153,7 @@ export function createProgram(ctx: CliContext): Command {
   registerHomeCommand(program, ctx);
   registerUserCommands(program, ctx);
   registerUserTweetsCommand(program, ctx);
+  registerDmCommands(program, ctx);
   registerNewsCommand(program, ctx);
   registerCheckCommand(program, ctx);
 
