@@ -6,32 +6,10 @@
 
 import fs from 'node:fs/promises';
 import path from 'node:path';
-
-const TARGET_OPERATIONS = [
-  'CreateTweet',
-  'CreateRetweet',
-  'DeleteRetweet',
-  'CreateFriendship',
-  'DestroyFriendship',
-  'FavoriteTweet',
-  'UnfavoriteTweet',
-  'CreateBookmark',
-  'DeleteBookmark',
-  'TweetDetail',
-  'SearchTimeline',
-  'Bookmarks',
-  'BookmarkFolderTimeline',
-  'Following',
-  'Followers',
-  'Likes',
-  'ExploreSidebar',
-  'ExplorePage',
-  'GenericTimelineById',
-  'TrendHistory',
-  'AboutAccountQuery',
-] as const;
-
-type OperationName = (typeof TARGET_OPERATIONS)[number];
+import {
+  type OperationName,
+  TARGET_QUERY_ID_OPERATIONS,
+} from '../src/lib/twitter-client-constants.js';
 
 const DISCOVERY_PAGES = [
   'https://x.com/?lang=en',
@@ -86,7 +64,7 @@ async function readExistingIds(): Promise<Record<OperationName, string>> {
     const contents = await fs.readFile(QUERY_IDS_PATH, 'utf8');
     const parsed = JSON.parse(contents) as Record<string, string>;
     const result: Partial<Record<OperationName, string>> = {};
-    for (const op of TARGET_OPERATIONS) {
+    for (const op of TARGET_QUERY_ID_OPERATIONS) {
       if (typeof parsed[op] === 'string' && parsed[op].trim().length > 0) {
         result[op] = parsed[op].trim();
       }
@@ -188,7 +166,7 @@ async function fetchAndExtract(
 
 async function writeIds(ids: Record<OperationName, string>): Promise<void> {
   const ordered: Record<OperationName, string> = {} as Record<OperationName, string>;
-  for (const op of TARGET_OPERATIONS) {
+  for (const op of TARGET_QUERY_ID_OPERATIONS) {
     if (ids[op]) {
       ordered[op] = ids[op];
     }
@@ -203,7 +181,7 @@ async function main(): Promise<void> {
   const bundleUrls = await discoverBundles();
   console.log(`[info] Found ${bundleUrls.length} bundles`);
 
-  const targets = new Set<OperationName>(TARGET_OPERATIONS);
+  const targets = new Set<OperationName>(TARGET_QUERY_ID_OPERATIONS);
   const existing = await readExistingIds();
 
   const discovered = await fetchAndExtract(bundleUrls, targets);
@@ -212,7 +190,7 @@ async function main(): Promise<void> {
   }
 
   const nextIds: Record<OperationName, string> = { ...existing };
-  for (const op of TARGET_OPERATIONS) {
+  for (const op of TARGET_QUERY_ID_OPERATIONS) {
     const found = discovered.get(op);
     if (found?.queryId) {
       nextIds[op] = found.queryId;
@@ -221,7 +199,7 @@ async function main(): Promise<void> {
 
   await writeIds(nextIds);
 
-  for (const op of TARGET_OPERATIONS) {
+  for (const op of TARGET_QUERY_ID_OPERATIONS) {
     const previous = existing[op];
     const current = nextIds[op];
     const source = discovered.get(op)?.bundle ?? 'existing file';

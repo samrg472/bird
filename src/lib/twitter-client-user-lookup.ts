@@ -28,8 +28,7 @@ export function withUserLookup<TBase extends AbstractConstructor<TwitterClientBa
     }
 
     private async getUserByScreenNameGraphQL(screenName: string): Promise<UserLookupResult> {
-      // UserByScreenName query IDs observed from web client
-      const queryIds = ['xc8f1g7BYqr6VTzTbvNlGw', 'qW5u-DAuXpMEG0zA1F7UGQ', 'sLVLhk0bGj3MVFEKTdax1w'];
+      const queryIds = await this.getUserByScreenNameQueryIds();
 
       const variables = {
         screen_name: screenName,
