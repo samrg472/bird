@@ -159,4 +159,24 @@ describe('runtime-features', () => {
     expect(snapshot.cachePath).toBe(cachePath);
     expect(snapshot.overrides.sets?.likes?.second_flag).toBe(false);
   });
+
+  it('preserves corrupt cache as .bak before rewriting', async () => {
+    const cacheDir = path.join(os.tmpdir(), `bird-test-${randomUUID()}`);
+    await mkdir(cacheDir, { recursive: true });
+    const cachePath = path.join(cacheDir, 'features.json');
+    const corrupt = '{not valid json!!!';
+    await writeFile(cachePath, corrupt, 'utf8');
+    process.env.BIRD_FEATURES_PATH = cachePath;
+    clearFeatureOverridesCache();
+
+    await addFeatureOverrides('likes', { healed_flag: true });
+
+    const bak = await readFile(`${cachePath}.bak`, 'utf8');
+    expect(bak).toBe(corrupt);
+
+    const parsed = JSON.parse(await readFile(cachePath, 'utf8')) as {
+      sets?: Record<string, Record<string, boolean>>;
+    };
+    expect(parsed.sets?.likes?.healed_flag).toBe(true);
+  });
 });
