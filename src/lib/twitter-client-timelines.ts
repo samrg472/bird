@@ -1,4 +1,5 @@
 import type { AbstractConstructor, Mixin, TwitterClientBase } from './twitter-client-base.js';
+import { truncateErrorBody } from './twitter-client-base.js';
 import { TWITTER_API_BASE } from './twitter-client-constants.js';
 import { buildBookmarksFeatures, buildLikesFeatures } from './twitter-client-features.js';
 import type { GraphqlTweetResult, SearchResult, TweetData } from './twitter-client-types.js';
@@ -135,7 +136,11 @@ export function withTimelines<TBase extends AbstractConstructor<TwitterClientBas
 
               if (!response.ok) {
                 const text = await response.text();
-                return { success: false as const, error: `HTTP ${response.status}: ${text.slice(0, 400)}`, had404 };
+                return {
+                  success: false as const,
+                  error: `HTTP ${response.status}: ${truncateErrorBody(text)}`,
+                  had404,
+                };
               }
 
               const data = (await response.json()) as {

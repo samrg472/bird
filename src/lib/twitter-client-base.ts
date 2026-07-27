@@ -8,6 +8,22 @@ import { normalizeQuoteDepth } from './twitter-client-utils.js';
 const MISSING_FEATURES_REGEX = /features cannot be null:\s*([a-z0-9_,\s]+)/i;
 const FEATURE_FLAG_NAME_REGEX = /^[a-z][a-z0-9_]*$/i;
 
+/** Marker appended by truncateErrorBody when a response body was cut off. */
+export const ERROR_BODY_TRUNCATION_MARKER = '…';
+const ERROR_BODY_MAX_CHARS = 400;
+
+/**
+ * Truncate an error-response body for inclusion in an error string, appending a
+ * marker so downstream parsers (parseMissingFeatureFlags) can tell that the
+ * final token may have been cut mid-name.
+ */
+export function truncateErrorBody(text: string): string {
+  if (text.length <= ERROR_BODY_MAX_CHARS) {
+    return text;
+  }
+  return `${text.slice(0, ERROR_BODY_MAX_CHARS)}${ERROR_BODY_TRUNCATION_MARKER}`;
+}
+
 /** Parse missing feature flag names from an X GraphQL 336-style error message. */
 function parseMissingFeatureFlags(error: string): string[] | null {
   const match = MISSING_FEATURES_REGEX.exec(error);
@@ -18,6 +34,13 @@ function parseMissingFeatureFlags(error: string): string[] | null {
     .split(',')
     .map((name) => name.trim())
     .filter((name) => FEATURE_FLAG_NAME_REGEX.test(name));
+  // If the flag list runs right up against the truncation marker, the final
+  // token may be a mid-name fragment of a real flag — drop it rather than
+  // persisting a corrupted name.
+  const captureEnd = match.index + match[0].length;
+  if (error[captureEnd] === ERROR_BODY_TRUNCATION_MARKER && names.length > 0) {
+    names.pop();
+  }
   return names.length > 0 ? names : null;
 }
 

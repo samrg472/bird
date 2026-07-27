@@ -10,6 +10,8 @@ import { validCookies } from './twitter-client-fixtures.js';
 const FEATURE_FLAG_NAME_REGEX = /^[a-z][a-z0-9_]*$/i;
 const JUNK_KEY_CHARS_REGEX = /[":]/;
 const TRUNCATION_JUNK_CHARS_REGEX = /["{}:]/;
+const MID_TOKEN_CUT_REGEX = /flagn_\d{2}_[a-z]{0,6}$/;
+const COMPLETE_FIXTURE_FLAG_REGEX = /^flagn_\d{2}_enabled$/;
 
 const originalFetch = global.fetch;
 
@@ -207,13 +209,19 @@ describe('TwitterClient feature heal', () => {
   });
 
   it('drops truncated mid-token flag fragments from a long 336 body', async () => {
-    // Build a body long enough that slice(0, 400) cuts the last flag mid-token.
-    const flags = Array.from({ length: 30 }, (_, i) => `flag_${String(i).padStart(2, '0')}_enabled`);
+    // Build a body long enough that the 400-char truncation cuts the last flag
+    // mid-token: 16-char names on an 18-char stride guarantee the cut lands
+    // inside a name (`flagn_18_enabled` → `flagn_18_enabl`), never on a
+    // token boundary.
+    const flags = Array.from({ length: 30 }, (_, i) => `flagn_${String(i).padStart(2, '0')}_enabled`);
     const message = `The following features cannot be null: ${flags.join(', ')}`;
     const envelope = JSON.stringify({
       errors: [{ message, name: 'BadRequest', code: 336 }],
     });
     expect(envelope.length).toBeGreaterThan(400);
+    // The fragment must be a strict prefix of a real flag so this fixture
+    // genuinely exercises the mid-token case (unlike a boundary-landing cut).
+    expect(envelope.slice(0, 400)).toMatch(MID_TOKEN_CUT_REGEX);
 
     mockFetch
       .mockResolvedValueOnce({
@@ -270,11 +278,18 @@ describe('TwitterClient feature heal', () => {
       sets?: Record<string, Record<string, boolean>>;
     };
     const following = persisted.sets?.following ?? {};
-    for (const key of Object.keys(following)) {
+    const keys = Object.keys(following);
+    for (const key of keys) {
       expect(key).toMatch(FEATURE_FLAG_NAME_REGEX);
       expect(key).not.toMatch(TRUNCATION_JUNK_CHARS_REGEX);
+      // Every persisted key must be a COMPLETE flag name, not a prefix fragment.
+      expect(key).toMatch(COMPLETE_FIXTURE_FLAG_REGEX);
     }
-    expect(Object.keys(following).length).toBeGreaterThan(0);
+    expect(keys.length).toBeGreaterThan(0);
+    // The flag cut mid-name by truncation must not be persisted as a fragment.
+    expect(keys.some((key) => key.startsWith('flagn_18'))).toBe(false);
+    // Complete flags before the cut survive.
+    expect(following.flagn_17_enabled).toBe(true);
   });
 
   it('skips heal when the 336 body yields no valid flag names', async () => {

@@ -1,5 +1,6 @@
 import { normalizeHandle } from './normalize-handle.js';
 import type { AbstractConstructor, Mixin, TwitterClientBase } from './twitter-client-base.js';
+import { truncateErrorBody } from './twitter-client-base.js';
 import { TWITTER_API_BASE } from './twitter-client-constants.js';
 import { buildUserProfileFeatures } from './twitter-client-features.js';
 import type { AboutAccountResult, TwitterUser, UserProfileResult } from './twitter-client-types.js';
@@ -267,7 +268,7 @@ export function withUserLookup<TBase extends AbstractConstructor<TwitterClientBa
                 }
                 return {
                   success: false as const,
-                  error: `HTTP ${response.status}: ${text.slice(0, 400)}`,
+                  error: `HTTP ${response.status}: ${truncateErrorBody(text)}`,
                   had404,
                 };
               }

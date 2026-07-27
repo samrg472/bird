@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { copyFile, mkdir, rename, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
@@ -117,7 +118,9 @@ function readOverridesFromEnv(): NormalizedFeatureOverrides | null {
 
 async function writeOverridesToDisk(cachePath: string, overrides: NormalizedFeatureOverrides): Promise<void> {
   const payload = toFeatureOverrides(overrides);
-  const tmpPath = `${cachePath}.tmp`;
+  // Per-call random suffix so concurrent bird processes can't clobber each
+  // other's tmp file between writeFile and rename.
+  const tmpPath = `${cachePath}.tmp.${randomBytes(6).toString('hex')}`;
   await mkdir(path.dirname(cachePath), { recursive: true });
   await writeFile(tmpPath, `${JSON.stringify(payload, null, 2)}\n`, 'utf8');
   await rename(tmpPath, cachePath);
