@@ -118,8 +118,11 @@ function readOverridesFromEnv(): NormalizedFeatureOverrides | null {
 
 async function writeOverridesToDisk(cachePath: string, overrides: NormalizedFeatureOverrides): Promise<void> {
   const payload = toFeatureOverrides(overrides);
-  // Per-call random suffix so concurrent bird processes can't clobber each
-  // other's tmp file between writeFile and rename.
+  // Per-call random suffix prevents tmp-FILE collisions between concurrent
+  // bird processes (each write lands intact). It does NOT serialize the
+  // read-modify-write cycle: two processes healing simultaneously still race,
+  // and the last rename wins with a payload derived from stale state. Accepted
+  // for a single-user CLI; a lock/retry loop isn't worth the plumbing here.
   const tmpPath = `${cachePath}.tmp.${randomBytes(6).toString('hex')}`;
   await mkdir(path.dirname(cachePath), { recursive: true });
   await writeFile(tmpPath, `${JSON.stringify(payload, null, 2)}\n`, 'utf8');

@@ -126,14 +126,16 @@ describe('dms commands', () => {
     expect(payload[0].text).toBe('Hey');
   });
 
-  it('resolves @handle via inbox match even when getCurrentUser fails', async () => {
+  it('exits on getCurrentUser failure during handle resolution instead of guessing', async () => {
     const program = new Command();
     registerDmCommands(program, baseCtx);
     vi.spyOn(TwitterClient.prototype, 'getCurrentUser').mockResolvedValue({
       success: false,
       error: 'transient whoami failure',
     });
-    vi.spyOn(TwitterClient.prototype, 'getDmInbox').mockResolvedValue({
+    // Inbox would "match" a self-handle in every 1:1 — resolution must not
+    // reach it without a self id to filter with.
+    const inboxSpy = vi.spyOn(TwitterClient.prototype, 'getDmInbox').mockResolvedValue({
       success: true,
       conversations: [
         {
@@ -146,26 +148,16 @@ describe('dms commands', () => {
         },
       ],
     });
-    const conversationSpy = vi.spyOn(TwitterClient.prototype, 'getDmConversation').mockResolvedValue({
-      success: true,
-      status: 'AT_END',
-      messages: [
-        {
-          id: '100',
-          conversationId: '111-222',
-          senderId: '222',
-          senderUsername: 'bob',
-          text: 'Hey',
-        },
-      ],
+
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => {
+      throw new Error('process.exit');
     });
 
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
-    await program.parseAsync(['node', 'bird', 'dm', '@bob', '--json']);
-
-    expect(conversationSpy).toHaveBeenCalledWith('111-222', { maxId: undefined });
-    const payload = JSON.parse(String(logSpy.mock.calls[0]?.[0]));
-    expect(payload[0].text).toBe('Hey');
+    await expect(program.parseAsync(['node', 'bird', 'dm', '@alice', '--json'])).rejects.toThrow('process.exit');
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('Failed to get current user'));
+    expect(exitSpy).toHaveBeenCalledWith(1);
+    expect(inboxSpy).not.toHaveBeenCalled();
   });
 
   it('resolves self-handle to self-notes conversation id', async () => {

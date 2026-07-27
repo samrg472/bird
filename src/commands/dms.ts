@@ -73,10 +73,15 @@ async function resolveConversationId(
     process.exit(1);
   }
 
-  // Best-effort: self-filtering (and the id-form fallback below) need the self
-  // id, but an inbox match shouldn't be blocked by a transient whoami failure.
+  // Handle resolution requires the self id: without it, the inbox match cannot
+  // tell a self-handle (which appears in every 1:1) from the other participant,
+  // and would silently return the wrong conversation. Fail cleanly instead.
   const self = await client.getCurrentUser();
-  const selfId = self.success ? self.user?.id : undefined;
+  if (!self.success || !self.user?.id) {
+    console.error(`${ctx.p('err')}Failed to get current user: ${self.error ?? 'Unknown error'}`);
+    process.exit(1);
+  }
+  const selfId = self.user.id;
 
   const inbox = await client.getDmInbox();
   if (inbox.success && inbox.conversations) {
@@ -86,18 +91,12 @@ async function resolveConversationId(
         return false;
       }
       return conversation.participants.some(
-        (participant) =>
-          (selfId === undefined || participant.id !== selfId) && participant.username?.toLowerCase() === needle,
+        (participant) => participant.id !== selfId && participant.username?.toLowerCase() === needle,
       );
     });
     if (match) {
       return { id: match.id };
     }
-  }
-
-  if (!selfId) {
-    console.error(`${ctx.p('err')}Failed to get current user: ${self.error ?? 'Unknown error'}`);
-    process.exit(1);
   }
 
   const lookup = await client.getUserIdByUsername(handle);
