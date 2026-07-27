@@ -298,194 +298,198 @@ export function withUsers<TBase extends AbstractConstructor<TwitterClientBase>>(
      * Get users that a user is following
      */
     async getFollowing(userId: string, count = 20, cursor?: string): Promise<FollowingResult> {
-      const variables: Record<string, unknown> = {
-        userId,
-        count,
-        includePromotedContent: false,
-      };
+      return this.withFeatureHeal('following', async () => {
+        const variables: Record<string, unknown> = {
+          userId,
+          count,
+          includePromotedContent: false,
+        };
 
-      if (cursor) {
-        variables.cursor = cursor;
-      }
+        if (cursor) {
+          variables.cursor = cursor;
+        }
 
-      const features = buildFollowingFeatures();
+        const features = buildFollowingFeatures();
 
-      const params = new URLSearchParams({
-        variables: JSON.stringify(variables),
-        features: JSON.stringify(features),
-      });
+        const params = new URLSearchParams({
+          variables: JSON.stringify(variables),
+          features: JSON.stringify(features),
+        });
 
-      const tryOnce = async () => {
-        let lastError: string | undefined;
-        let had404 = false;
-        const queryIds = await this.getFollowingQueryIds();
+        const tryOnce = async () => {
+          let lastError: string | undefined;
+          let had404 = false;
+          const queryIds = await this.getFollowingQueryIds();
 
-        for (const queryId of queryIds) {
-          const url = `${TWITTER_API_BASE}/${queryId}/Following?${params.toString()}`;
+          for (const queryId of queryIds) {
+            const url = `${TWITTER_API_BASE}/${queryId}/Following?${params.toString()}`;
 
-          try {
-            const response = await this.fetchWithTimeout(url, {
-              method: 'GET',
-              headers: this.getHeaders(),
-            });
+            try {
+              const response = await this.fetchWithTimeout(url, {
+                method: 'GET',
+                headers: this.getHeaders(),
+              });
 
-            if (response.status === 404) {
-              had404 = true;
-              lastError = `HTTP ${response.status}`;
-              continue;
-            }
+              if (response.status === 404) {
+                had404 = true;
+                lastError = `HTTP ${response.status}`;
+                continue;
+              }
 
-            if (!response.ok) {
-              const text = await response.text();
-              return { success: false as const, error: `HTTP ${response.status}: ${text.slice(0, 200)}`, had404 };
-            }
+              if (!response.ok) {
+                const text = await response.text();
+                return { success: false as const, error: `HTTP ${response.status}: ${text.slice(0, 200)}`, had404 };
+              }
 
-            const data = (await response.json()) as {
-              data?: {
-                user?: {
-                  result?: {
-                    timeline?: {
+              const data = (await response.json()) as {
+                data?: {
+                  user?: {
+                    result?: {
                       timeline?: {
-                        instructions?: Array<{ type?: string; entries?: Array<unknown> }>;
+                        timeline?: {
+                          instructions?: Array<{ type?: string; entries?: Array<unknown> }>;
+                        };
                       };
                     };
                   };
                 };
+                errors?: Array<{ message: string }>;
               };
-              errors?: Array<{ message: string }>;
-            };
 
-            if (data.errors && data.errors.length > 0) {
-              return { success: false as const, error: data.errors.map((e) => e.message).join(', '), had404 };
+              if (data.errors && data.errors.length > 0) {
+                return { success: false as const, error: data.errors.map((e) => e.message).join(', '), had404 };
+              }
+
+              const instructions = data.data?.user?.result?.timeline?.timeline?.instructions;
+              const users = parseUsersFromInstructions(instructions);
+              const nextCursor = extractCursorFromInstructions(
+                instructions as Array<{ entries?: Array<{ content?: unknown }> }> | undefined,
+              );
+
+              return { success: true as const, users, nextCursor, had404 };
+            } catch (error) {
+              lastError = error instanceof Error ? error.message : String(error);
             }
+          }
 
-            const instructions = data.data?.user?.result?.timeline?.timeline?.instructions;
-            const users = parseUsersFromInstructions(instructions);
-            const nextCursor = extractCursorFromInstructions(
-              instructions as Array<{ entries?: Array<{ content?: unknown }> }> | undefined,
-            );
+          return { success: false as const, error: lastError ?? 'Unknown error fetching following', had404 };
+        };
 
-            return { success: true as const, users, nextCursor, had404 };
-          } catch (error) {
-            lastError = error instanceof Error ? error.message : String(error);
+        const { result, refreshed } = await this.withRefreshedQueryIdsOn404(tryOnce);
+        if (result.success) {
+          return { success: true as const, users: result.users, nextCursor: result.nextCursor };
+        }
+
+        if (refreshed) {
+          // GraphQL Following can also return 404 (queryId churn / endpoint flakiness).
+          // Fallback to the internal v1.1 REST endpoint used by the web client (cookie-auth; no dev API key).
+          const restAttempt = await this.getFollowingViaRest(userId, count, cursor);
+          if (restAttempt.success) {
+            return restAttempt;
           }
         }
 
-        return { success: false as const, error: lastError ?? 'Unknown error fetching following', had404 };
-      };
-
-      const { result, refreshed } = await this.withRefreshedQueryIdsOn404(tryOnce);
-      if (result.success) {
-        return { success: true, users: result.users, nextCursor: result.nextCursor };
-      }
-
-      if (refreshed) {
-        // GraphQL Following can also return 404 (queryId churn / endpoint flakiness).
-        // Fallback to the internal v1.1 REST endpoint used by the web client (cookie-auth; no dev API key).
-        const restAttempt = await this.getFollowingViaRest(userId, count, cursor);
-        if (restAttempt.success) {
-          return restAttempt;
-        }
-      }
-
-      return { success: false, error: result.error };
+        return { success: false as const, error: result.error };
+      });
     }
 
     /**
      * Get users that follow a user
      */
     async getFollowers(userId: string, count = 20, cursor?: string): Promise<FollowingResult> {
-      const variables: Record<string, unknown> = {
-        userId,
-        count,
-        includePromotedContent: false,
-      };
+      return this.withFeatureHeal('following', async () => {
+        const variables: Record<string, unknown> = {
+          userId,
+          count,
+          includePromotedContent: false,
+        };
 
-      if (cursor) {
-        variables.cursor = cursor;
-      }
+        if (cursor) {
+          variables.cursor = cursor;
+        }
 
-      const features = buildFollowingFeatures();
+        const features = buildFollowingFeatures();
 
-      const params = new URLSearchParams({
-        variables: JSON.stringify(variables),
-        features: JSON.stringify(features),
-      });
+        const params = new URLSearchParams({
+          variables: JSON.stringify(variables),
+          features: JSON.stringify(features),
+        });
 
-      const tryOnce = async () => {
-        let lastError: string | undefined;
-        let had404 = false;
-        const queryIds = await this.getFollowersQueryIds();
+        const tryOnce = async () => {
+          let lastError: string | undefined;
+          let had404 = false;
+          const queryIds = await this.getFollowersQueryIds();
 
-        for (const queryId of queryIds) {
-          const url = `${TWITTER_API_BASE}/${queryId}/Followers?${params.toString()}`;
+          for (const queryId of queryIds) {
+            const url = `${TWITTER_API_BASE}/${queryId}/Followers?${params.toString()}`;
 
-          try {
-            const response = await this.fetchWithTimeout(url, {
-              method: 'GET',
-              headers: this.getHeaders(),
-            });
+            try {
+              const response = await this.fetchWithTimeout(url, {
+                method: 'GET',
+                headers: this.getHeaders(),
+              });
 
-            if (response.status === 404) {
-              had404 = true;
-              lastError = `HTTP ${response.status}`;
-              continue;
-            }
+              if (response.status === 404) {
+                had404 = true;
+                lastError = `HTTP ${response.status}`;
+                continue;
+              }
 
-            if (!response.ok) {
-              const text = await response.text();
-              return { success: false as const, error: `HTTP ${response.status}: ${text.slice(0, 200)}`, had404 };
-            }
+              if (!response.ok) {
+                const text = await response.text();
+                return { success: false as const, error: `HTTP ${response.status}: ${text.slice(0, 200)}`, had404 };
+              }
 
-            const data = (await response.json()) as {
-              data?: {
-                user?: {
-                  result?: {
-                    timeline?: {
+              const data = (await response.json()) as {
+                data?: {
+                  user?: {
+                    result?: {
                       timeline?: {
-                        instructions?: Array<{ type?: string; entries?: Array<unknown> }>;
+                        timeline?: {
+                          instructions?: Array<{ type?: string; entries?: Array<unknown> }>;
+                        };
                       };
                     };
                   };
                 };
+                errors?: Array<{ message: string }>;
               };
-              errors?: Array<{ message: string }>;
-            };
 
-            if (data.errors && data.errors.length > 0) {
-              return { success: false as const, error: data.errors.map((e) => e.message).join(', '), had404 };
+              if (data.errors && data.errors.length > 0) {
+                return { success: false as const, error: data.errors.map((e) => e.message).join(', '), had404 };
+              }
+
+              const instructions = data.data?.user?.result?.timeline?.timeline?.instructions;
+              const users = parseUsersFromInstructions(instructions);
+              const nextCursor = extractCursorFromInstructions(
+                instructions as Array<{ entries?: Array<{ content?: unknown }> }> | undefined,
+              );
+
+              return { success: true as const, users, nextCursor, had404 };
+            } catch (error) {
+              lastError = error instanceof Error ? error.message : String(error);
             }
+          }
 
-            const instructions = data.data?.user?.result?.timeline?.timeline?.instructions;
-            const users = parseUsersFromInstructions(instructions);
-            const nextCursor = extractCursorFromInstructions(
-              instructions as Array<{ entries?: Array<{ content?: unknown }> }> | undefined,
-            );
+          return { success: false as const, error: lastError ?? 'Unknown error fetching followers', had404 };
+        };
 
-            return { success: true as const, users, nextCursor, had404 };
-          } catch (error) {
-            lastError = error instanceof Error ? error.message : String(error);
+        const { result, refreshed } = await this.withRefreshedQueryIdsOn404(tryOnce);
+        if (result.success) {
+          return { success: true as const, users: result.users, nextCursor: result.nextCursor };
+        }
+
+        if (refreshed) {
+          // GraphQL Followers regularly returns 404 (queryId churn / endpoint flakiness).
+          // Fallback to the internal v1.1 REST endpoint used by the web client (cookie-auth; no dev API key).
+          const restAttempt = await this.getFollowersViaRest(userId, count, cursor);
+          if (restAttempt.success) {
+            return restAttempt;
           }
         }
 
-        return { success: false as const, error: lastError ?? 'Unknown error fetching followers', had404 };
-      };
-
-      const { result, refreshed } = await this.withRefreshedQueryIdsOn404(tryOnce);
-      if (result.success) {
-        return { success: true, users: result.users, nextCursor: result.nextCursor };
-      }
-
-      if (refreshed) {
-        // GraphQL Followers regularly returns 404 (queryId churn / endpoint flakiness).
-        // Fallback to the internal v1.1 REST endpoint used by the web client (cookie-auth; no dev API key).
-        const restAttempt = await this.getFollowersViaRest(userId, count, cursor);
-        if (restAttempt.success) {
-          return restAttempt;
-        }
-      }
-
-      return { success: false, error: result.error };
+        return { success: false as const, error: result.error };
+      });
     }
   }
 

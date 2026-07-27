@@ -89,7 +89,6 @@ export function withTimelines<TBase extends AbstractConstructor<TwitterClientBas
         return { success: false, error: userResult.error ?? 'Could not determine current user' };
       }
       const userId = userResult.user.id;
-      const features = buildLikesFeatures();
       const pageSize = 20;
       const seen = new Set<string>();
       const tweets: TweetData[] = [];
@@ -99,90 +98,93 @@ export function withTimelines<TBase extends AbstractConstructor<TwitterClientBas
       const { includeRaw = false, maxPages } = options;
 
       const fetchPage = async (pageCount: number, pageCursor?: string) => {
-        let lastError: string | undefined;
-        let had404 = false;
-        const queryIds = await this.getLikesQueryIds();
+        return this.withFeatureHeal('likes', async () => {
+          const features = buildLikesFeatures();
+          let lastError: string | undefined;
+          let had404 = false;
+          const queryIds = await this.getLikesQueryIds();
 
-        for (const queryId of queryIds) {
-          const variables = {
-            userId,
-            count: pageCount,
-            includePromotedContent: false,
-            withClientEventToken: false,
-            withBirdwatchNotes: false,
-            withVoice: true,
-            ...(pageCursor ? { cursor: pageCursor } : {}),
-          };
+          for (const queryId of queryIds) {
+            const variables = {
+              userId,
+              count: pageCount,
+              includePromotedContent: false,
+              withClientEventToken: false,
+              withBirdwatchNotes: false,
+              withVoice: true,
+              ...(pageCursor ? { cursor: pageCursor } : {}),
+            };
 
-          const params = new URLSearchParams({
-            variables: JSON.stringify(variables),
-            features: JSON.stringify(features),
-          });
-          const url = `${TWITTER_API_BASE}/${queryId}/Likes?${params.toString()}`;
-
-          try {
-            const response = await this.fetchWithTimeout(url, {
-              method: 'GET',
-              headers: this.getHeaders(),
+            const params = new URLSearchParams({
+              variables: JSON.stringify(variables),
+              features: JSON.stringify(features),
             });
+            const url = `${TWITTER_API_BASE}/${queryId}/Likes?${params.toString()}`;
 
-            if (response.status === 404) {
-              had404 = true;
-              lastError = `HTTP ${response.status}`;
-              continue;
-            }
+            try {
+              const response = await this.fetchWithTimeout(url, {
+                method: 'GET',
+                headers: this.getHeaders(),
+              });
 
-            if (!response.ok) {
-              const text = await response.text();
-              return { success: false as const, error: `HTTP ${response.status}: ${text.slice(0, 200)}`, had404 };
-            }
+              if (response.status === 404) {
+                had404 = true;
+                lastError = `HTTP ${response.status}`;
+                continue;
+              }
 
-            const data = (await response.json()) as {
-              data?: {
-                user?: {
-                  result?: {
-                    timeline?: {
+              if (!response.ok) {
+                const text = await response.text();
+                return { success: false as const, error: `HTTP ${response.status}: ${text.slice(0, 200)}`, had404 };
+              }
+
+              const data = (await response.json()) as {
+                data?: {
+                  user?: {
+                    result?: {
                       timeline?: {
-                        instructions?: Array<{
-                          entries?: Array<{
-                            content?: {
-                              itemContent?: {
-                                tweet_results?: {
-                                  result?: GraphqlTweetResult;
+                        timeline?: {
+                          instructions?: Array<{
+                            entries?: Array<{
+                              content?: {
+                                itemContent?: {
+                                  tweet_results?: {
+                                    result?: GraphqlTweetResult;
+                                  };
                                 };
                               };
-                            };
+                            }>;
                           }>;
-                        }>;
+                        };
                       };
                     };
                   };
                 };
+                errors?: Array<{ message: string }>;
               };
-              errors?: Array<{ message: string }>;
-            };
 
-            const instructions = data.data?.user?.result?.timeline?.timeline?.instructions;
-            if (data.errors && data.errors.length > 0) {
-              const message = data.errors.map((e) => e.message).join(', ');
-              if (!instructions) {
-                if (message.includes('Query: Unspecified')) {
-                  lastError = message;
-                  continue;
+              const instructions = data.data?.user?.result?.timeline?.timeline?.instructions;
+              if (data.errors && data.errors.length > 0) {
+                const message = data.errors.map((e) => e.message).join(', ');
+                if (!instructions) {
+                  if (message.includes('Query: Unspecified')) {
+                    lastError = message;
+                    continue;
+                  }
+                  return { success: false as const, error: message, had404 };
                 }
-                return { success: false as const, error: message, had404 };
               }
+              const pageTweets = parseTweetsFromInstructions(instructions, { quoteDepth: this.quoteDepth, includeRaw });
+              const extractedCursor = extractCursorFromInstructions(instructions);
+
+              return { success: true as const, tweets: pageTweets, cursor: extractedCursor, had404 };
+            } catch (error) {
+              lastError = error instanceof Error ? error.message : String(error);
             }
-            const pageTweets = parseTweetsFromInstructions(instructions, { quoteDepth: this.quoteDepth, includeRaw });
-            const extractedCursor = extractCursorFromInstructions(instructions);
-
-            return { success: true as const, tweets: pageTweets, cursor: extractedCursor, had404 };
-          } catch (error) {
-            lastError = error instanceof Error ? error.message : String(error);
           }
-        }
 
-        return { success: false as const, error: lastError ?? 'Unknown error fetching likes', had404 };
+          return { success: false as const, error: lastError ?? 'Unknown error fetching likes', had404 };
+        });
       };
 
       const fetchWithRefresh = async (pageCount: number, pageCursor?: string) => {

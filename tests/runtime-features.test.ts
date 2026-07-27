@@ -3,7 +3,13 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { clearFeatureOverridesCache, refreshFeatureOverridesCache } from '../src/lib/runtime-features.js';
+import {
+  addFeatureOverrides,
+  applyFeatureOverrides,
+  clearFeatureOverridesCache,
+  getFeatureOverridesSnapshot,
+  refreshFeatureOverridesCache,
+} from '../src/lib/runtime-features.js';
 import { buildLikesFeatures, buildListsFeatures, buildSearchFeatures } from '../src/lib/twitter-client-features.js';
 
 describe('runtime-features', () => {
@@ -125,5 +131,32 @@ describe('runtime-features', () => {
     expect(features.tweetypie_unmention_optimization_enabled).toBe(true);
     expect(features.vibe_api_enabled).toBe(true);
     expect(features.interactive_text_enabled).toBe(true);
+  });
+
+  it('addFeatureOverrides persists merges and invalidates cache', async () => {
+    const cacheDir = path.join(os.tmpdir(), `bird-test-${randomUUID()}`);
+    await mkdir(cacheDir, { recursive: true });
+    const cachePath = path.join(cacheDir, 'features.json');
+    process.env.BIRD_FEATURES_PATH = cachePath;
+    clearFeatureOverridesCache();
+
+    await addFeatureOverrides('likes', { healed_flag: true });
+
+    const raw = JSON.parse(await readFile(cachePath, 'utf8')) as {
+      sets?: Record<string, Record<string, boolean>>;
+    };
+    expect(raw.sets?.likes?.healed_flag).toBe(true);
+
+    // Warm cache, then add another flag — applyFeatureOverrides must see both.
+    expect(applyFeatureOverrides('likes', { base: false }).healed_flag).toBe(true);
+    await addFeatureOverrides('likes', { second_flag: false });
+    const merged = applyFeatureOverrides('likes', { base: true });
+    expect(merged.healed_flag).toBe(true);
+    expect(merged.second_flag).toBe(false);
+    expect(merged.base).toBe(true);
+
+    const snapshot = getFeatureOverridesSnapshot();
+    expect(snapshot.cachePath).toBe(cachePath);
+    expect(snapshot.overrides.sets?.likes?.second_flag).toBe(false);
   });
 });

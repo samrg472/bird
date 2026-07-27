@@ -179,6 +179,25 @@ export async function refreshFeatureOverridesCache(): Promise<FeatureOverridesSn
   return { cachePath, overrides: toFeatureOverrides(merged) };
 }
 
+/**
+ * Merge `flags` into the persisted overrides for `setName` (`'global'` for the
+ * global set), write the cache file, and invalidate the in-memory cache.
+ */
+export async function addFeatureOverrides(
+  setName: string,
+  flags: Record<string, boolean>,
+): Promise<FeatureOverridesSnapshot> {
+  const cachePath = resolveFeaturesCachePath();
+  const fromFile = readOverridesFromFile(cachePath) ?? { global: {}, sets: {} };
+  const normalizedFlags = normalizeFeatureMap(flags);
+  const addition: NormalizedFeatureOverrides =
+    setName === 'global' ? { global: normalizedFlags, sets: {} } : { global: {}, sets: { [setName]: normalizedFlags } };
+  const fileMerged = mergeOverrides(fromFile, addition);
+  await writeOverridesToDisk(cachePath, fileMerged);
+  cachedOverrides = null;
+  return getFeatureOverridesSnapshot();
+}
+
 export function clearFeatureOverridesCache(): void {
   cachedOverrides = null;
 }
