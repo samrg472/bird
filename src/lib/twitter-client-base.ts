@@ -5,8 +5,8 @@ import { type OperationName, QUERY_IDS, TARGET_QUERY_ID_OPERATIONS } from './twi
 import type { CurrentUserResult, TwitterClientOptions } from './twitter-client-types.js';
 import { normalizeQuoteDepth } from './twitter-client-utils.js';
 
-const MISSING_FEATURES_REGEX = /features cannot be null:\s*([^\n]+)/i;
-const TRAILING_PUNCTUATION_REGEX = /[.\s]+$/u;
+const MISSING_FEATURES_REGEX = /features cannot be null:\s*([a-z0-9_,\s]+)/i;
+const FEATURE_FLAG_NAME_REGEX = /^[a-z][a-z0-9_]*$/i;
 
 /** Parse missing feature flag names from an X GraphQL 336-style error message. */
 function parseMissingFeatureFlags(error: string): string[] | null {
@@ -16,8 +16,8 @@ function parseMissingFeatureFlags(error: string): string[] | null {
   }
   const names = match[1]
     .split(',')
-    .map((name) => name.trim().replace(TRAILING_PUNCTUATION_REGEX, ''))
-    .filter((name) => name.length > 0);
+    .map((name) => name.trim())
+    .filter((name) => FEATURE_FLAG_NAME_REGEX.test(name));
   return names.length > 0 ? names : null;
 }
 

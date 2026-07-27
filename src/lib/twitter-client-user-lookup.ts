@@ -267,7 +267,7 @@ export function withUserLookup<TBase extends AbstractConstructor<TwitterClientBa
                 }
                 return {
                   success: false as const,
-                  error: `HTTP ${response.status}: ${text.slice(0, 200)}`,
+                  error: `HTTP ${response.status}: ${text.slice(0, 400)}`,
                   had404,
                 };
               }
@@ -322,8 +322,11 @@ export function withUserLookup<TBase extends AbstractConstructor<TwitterClientBa
               }
 
               if (data.errors && data.errors.length > 0) {
-                lastError = data.errors.map((e) => e.message).join(', ');
-                continue;
+                return {
+                  success: false as const,
+                  error: data.errors.map((e) => e.message).join(', '),
+                  had404,
+                };
               }
 
               const result = data.data?.user?.result;

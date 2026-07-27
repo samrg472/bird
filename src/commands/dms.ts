@@ -73,6 +73,13 @@ async function resolveConversationId(
     process.exit(1);
   }
 
+  const self = await client.getCurrentUser();
+  if (!self.success || !self.user?.id) {
+    console.error(`${ctx.p('err')}Failed to get current user: ${self.error ?? 'Unknown error'}`);
+    process.exit(1);
+  }
+  const selfId = self.user.id;
+
   const inbox = await client.getDmInbox();
   if (inbox.success && inbox.conversations) {
     const needle = handle.toLowerCase();
@@ -80,7 +87,9 @@ async function resolveConversationId(
       if (conversation.type && conversation.type !== 'ONE_TO_ONE') {
         return false;
       }
-      return conversation.participants.some((participant) => participant.username?.toLowerCase() === needle);
+      return conversation.participants.some(
+        (participant) => participant.id !== selfId && participant.username?.toLowerCase() === needle,
+      );
     });
     if (match) {
       return { id: match.id };
@@ -93,14 +102,7 @@ async function resolveConversationId(
     process.exit(1);
   }
 
-  const self = await client.getCurrentUser();
-  if (!self.success || !self.user?.id) {
-    console.error(`${ctx.p('err')}Failed to get current user: ${self.error ?? 'Unknown error'}`);
-    process.exit(1);
-  }
-
   const theirId = lookup.userId;
-  const selfId = self.user.id;
   return { id: `${theirId}-${selfId}`, alternateId: `${selfId}-${theirId}` };
 }
 

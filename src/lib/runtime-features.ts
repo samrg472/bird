@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, rename, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import path from 'node:path';
 // biome-ignore lint/correctness/useImportExtensions: JSON module import doesn't use .js extension.
@@ -115,11 +115,12 @@ function readOverridesFromEnv(): NormalizedFeatureOverrides | null {
   }
 }
 
-function writeOverridesToDisk(cachePath: string, overrides: NormalizedFeatureOverrides): Promise<void> {
+async function writeOverridesToDisk(cachePath: string, overrides: NormalizedFeatureOverrides): Promise<void> {
   const payload = toFeatureOverrides(overrides);
-  return mkdir(path.dirname(cachePath), { recursive: true }).then(() =>
-    writeFile(cachePath, `${JSON.stringify(payload, null, 2)}\n`, 'utf8'),
-  );
+  const tmpPath = `${cachePath}.tmp`;
+  await mkdir(path.dirname(cachePath), { recursive: true });
+  await writeFile(tmpPath, `${JSON.stringify(payload, null, 2)}\n`, 'utf8');
+  await rename(tmpPath, cachePath);
 }
 
 export function loadFeatureOverrides(): NormalizedFeatureOverrides {
@@ -188,11 +189,15 @@ export async function addFeatureOverrides(
   flags: Record<string, boolean>,
 ): Promise<FeatureOverridesSnapshot> {
   const cachePath = resolveFeaturesCachePath();
-  const fromFile = readOverridesFromFile(cachePath) ?? { global: {}, sets: {} };
+  const fromFile = readOverridesFromFile(cachePath);
+  if (fromFile === null && existsSync(cachePath)) {
+    await copyFile(cachePath, `${cachePath}.bak`);
+  }
+  const base = fromFile ?? { global: {}, sets: {} };
   const normalizedFlags = normalizeFeatureMap(flags);
   const addition: NormalizedFeatureOverrides =
     setName === 'global' ? { global: normalizedFlags, sets: {} } : { global: {}, sets: { [setName]: normalizedFlags } };
-  const fileMerged = mergeOverrides(fromFile, addition);
+  const fileMerged = mergeOverrides(base, addition);
   await writeOverridesToDisk(cachePath, fileMerged);
   cachedOverrides = null;
   return getFeatureOverridesSnapshot();

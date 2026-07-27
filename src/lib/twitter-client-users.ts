@@ -338,7 +338,7 @@ export function withUsers<TBase extends AbstractConstructor<TwitterClientBase>>(
 
               if (!response.ok) {
                 const text = await response.text();
-                return { success: false as const, error: `HTTP ${response.status}: ${text.slice(0, 200)}`, had404 };
+                return { success: false as const, error: `HTTP ${response.status}: ${text.slice(0, 400)}`, had404 };
               }
 
               const data = (await response.json()) as {
@@ -437,7 +437,7 @@ export function withUsers<TBase extends AbstractConstructor<TwitterClientBase>>(
 
               if (!response.ok) {
                 const text = await response.text();
-                return { success: false as const, error: `HTTP ${response.status}: ${text.slice(0, 200)}`, had404 };
+                return { success: false as const, error: `HTTP ${response.status}: ${text.slice(0, 400)}`, had404 };
               }
 
               const data = (await response.json()) as {

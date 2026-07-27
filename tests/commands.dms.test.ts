@@ -78,9 +78,21 @@ describe('dms commands', () => {
   it('resolves @handle via inbox ONE_TO_ONE match', async () => {
     const program = new Command();
     registerDmCommands(program, baseCtx);
+    vi.spyOn(TwitterClient.prototype, 'getCurrentUser').mockResolvedValue({
+      success: true,
+      user: { id: '111', username: 'alice', name: 'Alice' },
+    });
     const inboxSpy = vi.spyOn(TwitterClient.prototype, 'getDmInbox').mockResolvedValue({
       success: true,
       conversations: [
+        {
+          id: '111-333',
+          type: 'ONE_TO_ONE',
+          participants: [
+            { id: '111', username: 'alice', name: 'Alice' },
+            { id: '333', username: 'carol', name: 'Carol' },
+          ],
+        },
         {
           id: '111-222',
           type: 'ONE_TO_ONE',
@@ -112,6 +124,52 @@ describe('dms commands', () => {
     expect(conversationSpy).toHaveBeenCalledWith('111-222', { maxId: undefined });
     const payload = JSON.parse(String(logSpy.mock.calls[0]?.[0]));
     expect(payload[0].text).toBe('Hey');
+  });
+
+  it('resolves self-handle to self-notes conversation id', async () => {
+    const program = new Command();
+    registerDmCommands(program, baseCtx);
+    vi.spyOn(TwitterClient.prototype, 'getCurrentUser').mockResolvedValue({
+      success: true,
+      user: { id: '111', username: 'alice', name: 'Alice' },
+    });
+    vi.spyOn(TwitterClient.prototype, 'getDmInbox').mockResolvedValue({
+      success: true,
+      conversations: [
+        {
+          id: '111-222',
+          type: 'ONE_TO_ONE',
+          participants: [
+            { id: '111', username: 'alice', name: 'Alice' },
+            { id: '222', username: 'bob', name: 'Bob' },
+          ],
+        },
+      ],
+    });
+    vi.spyOn(TwitterClient.prototype, 'getUserIdByUsername').mockResolvedValue({
+      success: true,
+      userId: '111',
+    });
+    const conversationSpy = vi.spyOn(TwitterClient.prototype, 'getDmConversation').mockResolvedValue({
+      success: true,
+      status: 'AT_END',
+      messages: [
+        {
+          id: '200',
+          conversationId: '111-111',
+          senderId: '111',
+          senderUsername: 'alice',
+          text: 'Note to self',
+        },
+      ],
+    });
+
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    await program.parseAsync(['node', 'bird', 'dm', '@alice', '--json']);
+
+    expect(conversationSpy).toHaveBeenCalledWith('111-111', { maxId: undefined });
+    const payload = JSON.parse(String(logSpy.mock.calls[0]?.[0]));
+    expect(payload[0].text).toBe('Note to self');
   });
 
   it('exits on DM inbox failure', async () => {
