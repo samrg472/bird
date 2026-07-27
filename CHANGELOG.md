@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.10.0 — 2026-07-27
+
+### Added
+- `dms` and `dm <conversation-id-or-@handle>` commands — read-only Direct Message inbox and conversation views via the 1.1 DM endpoints, with typed output, handle resolution, media URLs, and backward cursor pagination. Strictly GET-only: the mark-read endpoint is never called, so reading DMs from the CLI does not clear unread state.
+- Automatic healing of X's "features cannot be null" (error 336) responses: missing feature flags are parsed from the error, persisted as runtime feature overrides, and the request retried (max 2 attempts, no-progress guard). Wired into likes, following, followers, and profile lookups.
+
+### Changed
+- The query-ID operation inventory is consolidated: `bird query-ids --fresh` and the build-time updater both derive from the canonical `TARGET_QUERY_ID_OPERATIONS` (previously each kept its own stale subset), and the user-id lookup routes through runtime query-ID discovery instead of hardcoded IDs.
+- `getUserProfile` now fails fast on non-404 HTTP errors instead of retrying other query-ID candidates, matching the other timeline operations and letting feature-heal see the error.
+
 ## 0.9.0 — 2026-07-24
 
 ### Added
