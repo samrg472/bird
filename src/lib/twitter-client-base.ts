@@ -1,8 +1,25 @@
 import { randomBytes, randomUUID } from 'node:crypto';
+import { addFeatureOverrides } from './runtime-features.js';
 import { runtimeQueryIds } from './runtime-query-ids.js';
 import { type OperationName, QUERY_IDS, TARGET_QUERY_ID_OPERATIONS } from './twitter-client-constants.js';
 import type { CurrentUserResult, TwitterClientOptions } from './twitter-client-types.js';
 import { normalizeQuoteDepth } from './twitter-client-utils.js';
+
+const MISSING_FEATURES_REGEX = /features cannot be null:\s*([^\n]+)/i;
+const TRAILING_PUNCTUATION_REGEX = /[.\s]+$/u;
+
+/** Parse missing feature flag names from an X GraphQL 336-style error message. */
+function parseMissingFeatureFlags(error: string): string[] | null {
+  const match = MISSING_FEATURES_REGEX.exec(error);
+  if (!match?.[1]) {
+    return null;
+  }
+  const names = match[1]
+    .split(',')
+    .map((name) => name.trim().replace(TRAILING_PUNCTUATION_REGEX, ''))
+    .filter((name) => name.length > 0);
+  return names.length > 0 ? names : null;
+}
 
 // biome-ignore lint/suspicious/noExplicitAny: TS mixin base constructor requirement.
 export type Constructor<T = object> = new (...args: any[]) => T;
@@ -71,6 +88,53 @@ export abstract class TwitterClientBase {
     await this.refreshQueryIds();
     const secondAttempt = await attempt();
     return { result: secondAttempt, refreshed: true };
+  }
+
+  /**
+   * Self-heal X GraphQL error 336 ("features cannot be null"): when the API
+   * requires feature flags the client omitted, persist them via
+   * `addFeatureOverrides` and retry (max 2 heal retries).
+   *
+   * The attempt closure MUST rebuild its `features` object on each call
+   * (e.g. via `applyFeatureOverrides` / `build*Features`) so healed overrides
+   * take effect.
+   */
+  protected async withFeatureHeal<T extends { success: boolean; error?: string }>(
+    setName: string,
+    attempt: () => Promise<T>,
+  ): Promise<T> {
+    const addedFlags = new Set<string>();
+    let result = await attempt();
+    let heals = 0;
+
+    while (!result.success && heals < 2) {
+      const missing = parseMissingFeatureFlags(result.error ?? '');
+      if (!missing) {
+        break;
+      }
+
+      const newFlags = missing.filter((flag) => !addedFlags.has(flag));
+      if (newFlags.length === 0) {
+        break;
+      }
+
+      const overrides: Record<string, boolean> = {};
+      for (const flag of newFlags) {
+        overrides[flag] = true;
+        addedFlags.add(flag);
+      }
+
+      try {
+        await addFeatureOverrides(setName, overrides);
+      } catch {
+        break;
+      }
+
+      heals += 1;
+      result = await attempt();
+    }
+
+    return result;
   }
 
   protected async getTweetDetailQueryIds(): Promise<string[]> {

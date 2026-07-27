@@ -1,6 +1,7 @@
 import { normalizeHandle } from './normalize-handle.js';
 import type { AbstractConstructor, Mixin, TwitterClientBase } from './twitter-client-base.js';
 import { TWITTER_API_BASE } from './twitter-client-constants.js';
+import { buildUserProfileFeatures } from './twitter-client-features.js';
 import type { AboutAccountResult, TwitterUser, UserProfileResult } from './twitter-client-types.js';
 
 /** Result of username to userId lookup */
@@ -226,161 +227,151 @@ export function withUserLookup<TBase extends AbstractConstructor<TwitterClientBa
         return { success: false, error: `Invalid username: ${username}` };
       }
 
-      const variables = {
-        screen_name: cleanUsername,
-        withSafetyModeUserFields: true,
-      };
+      return this.withFeatureHeal('userProfile', async () => {
+        const variables = {
+          screen_name: cleanUsername,
+          withSafetyModeUserFields: true,
+        };
 
-      const features = {
-        hidden_profile_subscriptions_enabled: true,
-        hidden_profile_likes_enabled: true,
-        rweb_tipjar_consumption_enabled: true,
-        responsive_web_graphql_exclude_directive_enabled: true,
-        verified_phone_label_enabled: false,
-        subscriptions_verification_info_is_identity_verified_enabled: true,
-        subscriptions_verification_info_verified_since_enabled: true,
-        highlights_tweets_tab_ui_enabled: true,
-        responsive_web_twitter_article_notes_tab_enabled: true,
-        subscriptions_feature_can_gift_premium: true,
-        creator_subscriptions_tweet_preview_api_enabled: true,
-        responsive_web_graphql_skip_user_profile_image_extensions_enabled: false,
-        responsive_web_graphql_timeline_navigation_enabled: true,
-        blue_business_profile_image_shape_enabled: true,
-      };
+        const features = buildUserProfileFeatures();
 
-      const fieldToggles = {
-        withAuxiliaryUserLabels: false,
-      };
+        const fieldToggles = {
+          withAuxiliaryUserLabels: false,
+        };
 
-      const params = new URLSearchParams({
-        variables: JSON.stringify(variables),
-        features: JSON.stringify(features),
-        fieldToggles: JSON.stringify(fieldToggles),
-      });
+        const params = new URLSearchParams({
+          variables: JSON.stringify(variables),
+          features: JSON.stringify(features),
+          fieldToggles: JSON.stringify(fieldToggles),
+        });
 
-      const tryOnce = async () => {
-        let lastError: string | undefined;
-        let had404 = false;
-        const queryIds = await this.getUserByScreenNameQueryIds();
+        const tryOnce = async () => {
+          let lastError: string | undefined;
+          let had404 = false;
+          const queryIds = await this.getUserByScreenNameQueryIds();
 
-        for (const queryId of queryIds) {
-          const url = `${TWITTER_API_BASE}/${queryId}/UserByScreenName?${params.toString()}`;
+          for (const queryId of queryIds) {
+            const url = `${TWITTER_API_BASE}/${queryId}/UserByScreenName?${params.toString()}`;
 
-          try {
-            const response = await this.fetchWithTimeout(url, {
-              method: 'GET',
-              headers: this.getHeaders(),
-            });
+            try {
+              const response = await this.fetchWithTimeout(url, {
+                method: 'GET',
+                headers: this.getHeaders(),
+              });
 
-            if (!response.ok) {
-              const text = await response.text();
-              if (response.status === 404) {
-                had404 = true;
-                lastError = `HTTP ${response.status}`;
-                continue;
+              if (!response.ok) {
+                const text = await response.text();
+                if (response.status === 404) {
+                  had404 = true;
+                  lastError = `HTTP ${response.status}`;
+                  continue;
+                }
+                return {
+                  success: false as const,
+                  error: `HTTP ${response.status}: ${text.slice(0, 200)}`,
+                  had404,
+                };
               }
-              lastError = `HTTP ${response.status}: ${text.slice(0, 200)}`;
-              continue;
-            }
 
-            const data = (await response.json()) as {
-              data?: {
-                user?: {
-                  result?: {
-                    __typename?: string;
-                    rest_id?: string;
-                    is_blue_verified?: boolean;
-                    legacy?: {
-                      screen_name?: string;
-                      name?: string;
-                      description?: string;
-                      followers_count?: number;
-                      friends_count?: number;
-                      statuses_count?: number;
-                      created_at?: string;
-                      location?: string;
-                      url?: string;
-                      profile_image_url_https?: string;
-                      entities?: {
-                        url?: {
-                          urls?: Array<{ url?: string; expanded_url?: string }>;
+              const data = (await response.json()) as {
+                data?: {
+                  user?: {
+                    result?: {
+                      __typename?: string;
+                      rest_id?: string;
+                      is_blue_verified?: boolean;
+                      legacy?: {
+                        screen_name?: string;
+                        name?: string;
+                        description?: string;
+                        followers_count?: number;
+                        friends_count?: number;
+                        statuses_count?: number;
+                        created_at?: string;
+                        location?: string;
+                        url?: string;
+                        profile_image_url_https?: string;
+                        entities?: {
+                          url?: {
+                            urls?: Array<{ url?: string; expanded_url?: string }>;
+                          };
                         };
                       };
-                    };
-                    core?: {
-                      screen_name?: string;
-                      name?: string;
-                      created_at?: string;
-                    };
-                    location?: {
-                      location?: string;
-                    };
-                    avatar?: {
-                      image_url?: string;
+                      core?: {
+                        screen_name?: string;
+                        name?: string;
+                        created_at?: string;
+                      };
+                      location?: {
+                        location?: string;
+                      };
+                      avatar?: {
+                        image_url?: string;
+                      };
                     };
                   };
                 };
+                errors?: Array<{ message: string }>;
               };
-              errors?: Array<{ message: string }>;
-            };
 
-            if (data.data?.user?.result?.__typename === 'UserUnavailable') {
-              return {
-                success: false as const,
-                error: `User @${cleanUsername} not found or unavailable`,
-                had404,
+              if (data.data?.user?.result?.__typename === 'UserUnavailable') {
+                return {
+                  success: false as const,
+                  error: `User @${cleanUsername} not found or unavailable`,
+                  had404,
+                };
+              }
+
+              if (data.errors && data.errors.length > 0) {
+                lastError = data.errors.map((e) => e.message).join(', ');
+                continue;
+              }
+
+              const result = data.data?.user?.result;
+              const userId = result?.rest_id;
+              const screenName = result?.legacy?.screen_name ?? result?.core?.screen_name;
+
+              if (!result || !userId || !screenName) {
+                lastError = 'Could not parse user data from response';
+                continue;
+              }
+
+              const legacy = result.legacy;
+              const websiteUrl = legacy?.entities?.url?.urls?.[0]?.expanded_url ?? legacy?.url;
+              const user: TwitterUser = {
+                id: userId,
+                username: screenName,
+                name: legacy?.name ?? result.core?.name ?? screenName,
+                description: legacy?.description || undefined,
+                followersCount: legacy?.followers_count,
+                followingCount: legacy?.friends_count,
+                tweetsCount: legacy?.statuses_count,
+                location: legacy?.location || result.location?.location || undefined,
+                websiteUrl: websiteUrl || undefined,
+                isBlueVerified: result.is_blue_verified,
+                profileImageUrl: legacy?.profile_image_url_https ?? result.avatar?.image_url,
+                createdAt: legacy?.created_at ?? result.core?.created_at,
               };
+
+              return { success: true as const, user, had404 };
+            } catch (error) {
+              lastError = error instanceof Error ? error.message : String(error);
             }
-
-            if (data.errors && data.errors.length > 0) {
-              lastError = data.errors.map((e) => e.message).join(', ');
-              continue;
-            }
-
-            const result = data.data?.user?.result;
-            const userId = result?.rest_id;
-            const screenName = result?.legacy?.screen_name ?? result?.core?.screen_name;
-
-            if (!result || !userId || !screenName) {
-              lastError = 'Could not parse user data from response';
-              continue;
-            }
-
-            const legacy = result.legacy;
-            const websiteUrl = legacy?.entities?.url?.urls?.[0]?.expanded_url ?? legacy?.url;
-            const user: TwitterUser = {
-              id: userId,
-              username: screenName,
-              name: legacy?.name ?? result.core?.name ?? screenName,
-              description: legacy?.description || undefined,
-              followersCount: legacy?.followers_count,
-              followingCount: legacy?.friends_count,
-              tweetsCount: legacy?.statuses_count,
-              location: legacy?.location || result.location?.location || undefined,
-              websiteUrl: websiteUrl || undefined,
-              isBlueVerified: result.is_blue_verified,
-              profileImageUrl: legacy?.profile_image_url_https ?? result.avatar?.image_url,
-              createdAt: legacy?.created_at ?? result.core?.created_at,
-            };
-
-            return { success: true as const, user, had404 };
-          } catch (error) {
-            lastError = error instanceof Error ? error.message : String(error);
           }
-        }
 
-        return {
-          success: false as const,
-          error: lastError ?? 'Unknown error fetching user profile',
-          had404,
+          return {
+            success: false as const,
+            error: lastError ?? 'Unknown error fetching user profile',
+            had404,
+          };
         };
-      };
 
-      const { result } = await this.withRefreshedQueryIdsOn404(tryOnce);
-      if (result.success) {
-        return { success: true, user: result.user };
-      }
-      return { success: false, error: result.error };
+        const { result } = await this.withRefreshedQueryIdsOn404(tryOnce);
+        if (result.success) {
+          return { success: true as const, user: result.user };
+        }
+        return { success: false as const, error: result.error };
+      });
     }
 
     private async getAboutAccountQueryIds(): Promise<string[]> {
