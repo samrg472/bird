@@ -411,3 +411,43 @@ export interface CreateTweetResponse {
   };
   errors?: Array<{ message: string; code?: number }>;
 }
+
+export interface DmParticipant {
+  id: string;
+  username?: string;
+  name?: string;
+}
+
+export interface DmConversationSummary {
+  id: string;
+  type?: string; // ONE_TO_ONE | GROUP_DM
+  participants: DmParticipant[];
+  lastMessageText?: string;
+  lastMessageAt?: string; // ISO string from epoch-ms entry time
+  unread?: boolean;
+}
+
+export interface DmMessage {
+  id: string;
+  conversationId: string;
+  senderId: string;
+  senderUsername?: string;
+  text: string;
+  createdAt?: string; // ISO from epoch-ms
+  mediaUrls?: string[];
+}
+
+export interface DmInboxResult {
+  success: boolean;
+  conversations?: DmConversationSummary[];
+  error?: string;
+}
+
+export interface DmConversationResult {
+  success: boolean;
+  messages?: DmMessage[];
+  status?: string;
+  minEntryId?: string;
+  maxEntryId?: string;
+  error?: string;
+}
