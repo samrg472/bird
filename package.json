@@ -35,15 +35,10 @@
     "graphql:update": "tsx scripts/update-query-ids.ts"
   },
   "dependencies": {
-    "@steipete/sweet-cookie": "0.1.0",
+    "@steipete/sweet-cookie": "0.4.2",
     "commander": "^14.0.2",
     "json5": "^2.2.3",
     "kleur": "^4.1.5"
-  },
-  "pnpm": {
-    "patchedDependencies": {
-      "@steipete/sweet-cookie": "patches/@steipete__sweet-cookie.patch"
-    }
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.10",

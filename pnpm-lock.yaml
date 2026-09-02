@@ -1,21 +1,16 @@
 lockfileVersion: '9.0'
 
 settings:
-  autoInstallPeers: false
+  autoInstallPeers: true
   excludeLinksFromLockfile: false
-
-patchedDependencies:
-  '@steipete/sweet-cookie':
-    hash: 4ff44e9d3b5770a7b751c7a3470572bdf485763c28ead8055468dd0ae9a6e986
-    path: patches/@steipete__sweet-cookie.patch
 
 importers:
 
   .:
     dependencies:
       '@steipete/sweet-cookie':
-        specifier: 0.1.0
-        version: 0.1.0(patch_hash=4ff44e9d3b5770a7b751c7a3470572bdf485763c28ead8055468dd0ae9a6e986)
+        specifier: 0.4.2
+        version: 0.4.2
       commander:
         specifier: ^14.0.2
         version: 14.0.2
@@ -476,9 +471,10 @@ packages:
   '@standard-schema/spec@1.1.0':
     resolution: {integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==}
 
-  '@steipete/sweet-cookie@0.1.0':
-    resolution: {integrity: sha512-cF8hS6rTohAFI1NAm2/HM9omBlw6V1DpwF6q5e9FB+l274HjtyirCgCc6QK2Rtuh7uDoqWHshFQZPsceyJuVgw==}
+  '@steipete/sweet-cookie@0.4.2':
+    resolution: {integrity: sha512-uwu5N5HO3dpZnVdbzlM2j1ya1H4fvJDBLeSbePE0Kb64c8yie7N6Kvft5yHYxIKoHuYkIUrU4TE9VdfzGp0kWQ==}
     engines: {node: '>=22'}
+    hasBin: true
 
   '@types/chai@5.2.3':
     resolution: {integrity: sha512-Mw558oeA9fFbv65/y4mHtXDs9bPnFMZAL/jxdPFUpOHHIXX91mcgEHbS5Lahr+pwZFR8A7GQleRWeI6cGFC2UA==}
@@ -1056,7 +1052,7 @@ snapshots:
 
   '@standard-schema/spec@1.1.0': {}
 
-  '@steipete/sweet-cookie@0.1.0(patch_hash=4ff44e9d3b5770a7b751c7a3470572bdf485763c28ead8055468dd0ae9a6e986)': {}
+  '@steipete/sweet-cookie@0.4.2': {}
 
   '@types/chai@5.2.3':
     dependencies:
