@@ -20,6 +20,12 @@ export {
 } from './twitter-client.js';
 export type { HomeTimelineFetchOptions } from './twitter-client-home.js';
 export type { ExploreTab, NewsFetchOptions, NewsItem, NewsResult } from './twitter-client-news.js';
+export {
+  extractOperation,
+  parseRateLimitHeaders,
+  type RateLimitInfo,
+  type ResponseObservation,
+} from './twitter-client-rate-limit.js';
 export type { SearchFetchOptions } from './twitter-client-search.js';
 export type { TimelineFetchOptions } from './twitter-client-timelines.js';
 export type { TweetFetchOptions } from './twitter-client-tweet-detail.js';

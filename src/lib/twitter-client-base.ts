@@ -2,6 +2,12 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { addFeatureOverrides } from './runtime-features.js';
 import { runtimeQueryIds } from './runtime-query-ids.js';
 import { type OperationName, QUERY_IDS, TARGET_QUERY_ID_OPERATIONS } from './twitter-client-constants.js';
+import {
+  extractOperation,
+  headerOrNull,
+  parseRateLimitHeaders,
+  type ResponseObservation,
+} from './twitter-client-rate-limit.js';
 import type { CurrentUserResult, TwitterClientOptions } from './twitter-client-types.js';
 import { normalizeQuoteDepth } from './twitter-client-utils.js';
 
@@ -62,6 +68,7 @@ export abstract class TwitterClientBase {
   protected clientUuid: string;
   protected clientDeviceId: string;
   protected clientUserId?: string;
+  private onResponse?: (observation: ResponseObservation) => void;
 
   constructor(options: TwitterClientOptions) {
     if (!options.cookies.authToken || !options.cookies.ct0) {
@@ -77,6 +84,7 @@ export abstract class TwitterClientBase {
     this.quoteDepth = normalizeQuoteDepth(options.quoteDepth);
     this.clientUuid = randomUUID();
     this.clientDeviceId = randomUUID();
+    this.onResponse = options.onResponse;
   }
 
   protected abstract getCurrentUser(): Promise<CurrentUserResult>;
@@ -171,16 +179,48 @@ export abstract class TwitterClientBase {
   }
 
   protected async fetchWithTimeout(url: string, init: RequestInit): Promise<Response> {
+    let response: Response;
     if (!this.timeoutMs || this.timeoutMs <= 0) {
-      return fetch(url, init);
+      response = await fetch(url, init);
+    } else {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
+      try {
+        response = await fetch(url, { ...init, signal: controller.signal });
+      } finally {
+        clearTimeout(timeoutId);
+      }
     }
+    this.observeResponse(url, init.method, response);
+    return response;
+  }
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
+  /**
+   * Fires the `onResponse` hook once per completed HTTP response. This is the
+   * lowest layer every request funnels through, so observers see pagination
+   * pages, query-ID fallback probes, and internal retries — one observation
+   * per underlying response. Observer exceptions are swallowed here:
+   * observability must never break a request.
+   */
+  private observeResponse(url: string, method: string | undefined, response: Response): void {
+    if (!this.onResponse) {
+      return;
+    }
     try {
-      return await fetch(url, { ...init, signal: controller.signal });
-    } finally {
-      clearTimeout(timeoutId);
+      const observation: ResponseObservation = {
+        operation: extractOperation(url),
+        url,
+        method: method ?? 'GET',
+        status: response.status,
+        ok: response.ok,
+        atMs: Date.now(),
+        rateLimit: parseRateLimitHeaders(response.headers),
+        contentType: headerOrNull(response.headers, 'content-type'),
+        cfMitigated: headerOrNull(response.headers, 'cf-mitigated'),
+      };
+      this.onResponse(observation);
+    } catch {
+      // ignore observer failures
     }
   }
 

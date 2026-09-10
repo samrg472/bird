@@ -1,4 +1,5 @@
 import type { TwitterCookies } from './cookies.js';
+import type { ResponseObservation } from './twitter-client-rate-limit.js';
 
 // Raw media entity from Twitter API
 export interface GraphqlMediaEntity {
@@ -373,6 +374,15 @@ export interface TwitterClientOptions {
   timeoutMs?: number;
   // Max depth for quoted tweets (0 disables). Defaults to 1.
   quoteDepth?: number;
+  /**
+   * Observability hook: fired once per completed HTTP response with the
+   * response's rate-limit headers parsed (see ResponseObservation). Every
+   * account-scoped request funnels through the fetch layer, so observers see
+   * pagination pages, query-ID fallback probes, and internal retries — one
+   * observation per underlying HTTP response. The hook must be synchronous;
+   * throwing observers are ignored. Aborted/timed-out requests emit nothing.
+   */
+  onResponse?: (observation: ResponseObservation) => void;
 }
 
 export interface TwitterList {
